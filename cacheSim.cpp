@@ -13,51 +13,6 @@ using std::stringstream;
 
 #include "cacheSim.h"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 int main(int argc, char **argv) {
 
 	if (argc < 19) {
@@ -135,9 +90,7 @@ int main(int argc, char **argv) {
 		// DEBUG - remove this line
 		cout << " (dec) " << num << endl;
 
-		if(operation=='r') memory.read(num);
-		else memory.write(num);
-
+		memory.execute(num, operation);
 	}
 
 	double L1MissRate;

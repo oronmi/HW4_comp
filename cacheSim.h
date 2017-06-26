@@ -5,17 +5,36 @@
  *      Author: compm
  */
 
+#include <iostream>
+using std::cout;
+
 #ifndef CACHESIM_H_
 #define CACHESIM_H_
 
 #include <vector>
-#include <queue>
+#include <deque>
 using std::vector;
-using std::queue;
+using std::deque;
+using std::endl;
 
 enum{
 	GET = 0,
 	SET = 1,
+};
+
+enum{
+	CLEAN = 0,
+	DIRTY = 1,
+};
+
+enum{
+	INVALID = 0,
+	VALID = 1,
+};
+
+enum{
+	NOT_EVICTED = 0,
+	EVICTED = 1,
 };
 
 class block {
@@ -34,29 +53,43 @@ private:
 class set {
 public:
 	set(unsigned int numOfWays);
-	bool read(unsigned long int address);
-	bool write(unsigned long int address,unsigned int *evictAddress);
+	void read(unsigned long int address);
+	void write(unsigned long int address);
+	bool allocate(unsigned long int address, unsigned long int *evictAddress);
+	long int find(unsigned long int address);
+	void update(unsigned long int address);
+	void updateLRU(long int index);
+	void erase(unsigned long int address);
 private:
 	vector<block> blocks;
-	queue<unsigned int> LRU;
+	deque<unsigned int> LRU;
+	unsigned int numOfWays;
 };
 
 class cache {
 public:
-	cache(unsigned int numOfSets, unsigned int cyclesPerAccess, const unsigned int numOfWays);
+	cache();
+	cache(unsigned int numOfSets, unsigned int numOfWays, unsigned int bSize);
+	bool find(unsigned long int address);
+	void read(unsigned long int address);
+	void write(unsigned long int address);
+	void update(unsigned long int address);
+	bool allocate(unsigned long int address, unsigned long int *evictAddress);
+	void erase(unsigned long int address);
+	unsigned int extractSet(unsigned long int address);
 private:
 	vector<set> sets;
-	const unsigned int cyclesPerAccess;
-	const unsigned int numOfWays;
+	 unsigned int numOfWays;
+	unsigned int setsMask;
+	unsigned int bSize;
 };
 
 class MEM {
 public:
-	MEM(unsigned int MEM_cyc, unsigned int blockSize, bool writeAllocate,
+	MEM(unsigned int MEMCyc, unsigned int blockSize, bool writeAllocate,
 			unsigned int L1Size, unsigned int L1Assoc, unsigned int L1Cyc,
 			unsigned int L2Size, unsigned int L2Assoc, unsigned int L2Cyc);
-	void read(unsigned long int address);
-	void write(unsigned int address);
+	void execute(unsigned long int address, char operation);
 	void getStats(double* L1MissRate, double* L2MissRate, double* avgAccTime);
 private:
 	cache L1;
@@ -64,9 +97,11 @@ private:
 	unsigned int L1_hits;
 	unsigned int L2_hits;
 	unsigned int MEM_hits;
-	const unsigned int L1_cyc;
-	const unsigned int L2_cyc;
-	const unsigned int MEM_cyc;
+	unsigned int L1_cyc;
+	unsigned int L2_cyc;
+	unsigned int MEM_cyc;
+	unsigned long int blockMask;
+	bool write_allocate;
 };
 
 

@@ -55,9 +55,9 @@ public:
 	set(unsigned int numOfWays);
 	void read(unsigned long int address);
 	void write(unsigned long int address);
-	bool allocate(unsigned long int address, unsigned long int *evictAddress);
+	bool allocate(unsigned long int address, block *evictBlock);
 	long int find(unsigned long int address);
-	void update(unsigned long int address);
+	void update(block *evictBlock);
 	void updateLRU(long int index);
 	void erase(unsigned long int address);
 private:
@@ -73,13 +73,13 @@ public:
 	bool find(unsigned long int address);
 	void read(unsigned long int address);
 	void write(unsigned long int address);
-	void update(unsigned long int address);
-	bool allocate(unsigned long int address, unsigned long int *evictAddress);
+	void update(block *evictBlock);
+	bool allocate(unsigned long int address, block *evictBlock);
 	void erase(unsigned long int address);
 	unsigned int extractSet(unsigned long int address);
 private:
 	vector<set> sets;
-	 unsigned int numOfWays;
+	unsigned int numOfWays;
 	unsigned int setsMask;
 	unsigned int bSize;
 };

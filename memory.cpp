@@ -56,6 +56,7 @@ void set::erase(unsigned long int address)
 			if(*it == way) {
 				LRU.erase(it);
 				LRU.push_front(way);
+				return;
 			}
 }
 
@@ -63,7 +64,7 @@ long int set::find(unsigned long int address)
 {
 	for(vector<block>::iterator it = blocks.begin(); it !=blocks.end(); it++)
 	{
-		cout<<(it-blocks.begin())<<" "<<"address: "<<(it->set_get_address(0,GET))<<" valid: "<<it->set_get_valid(0,GET)<<endl;
+//		cout<<(it-blocks.begin())<<" "<<"address: "<<(it->set_get_address(0,GET))<<" valid: "<<it->set_get_valid(0,GET)<<endl;
 		if((it->set_get_address(0,GET) == address) &&  it->set_get_valid(0,GET))
 		{
 			return it-blocks.begin();
@@ -72,12 +73,12 @@ long int set::find(unsigned long int address)
 	return -1;
 }
 
-bool set::allocate(unsigned long int address, unsigned long int *evictAddress)
+bool set::allocate(unsigned long int address, block *evictBlock)
 {
 	bool isEvicted=false;
 	long int way=LRU.front();
-	if(blocks[way].set_get_valid(0,GET) && blocks[way].set_get_dirty(0,GET)) {
-		*evictAddress=blocks[way].set_get_address(0,GET);
+	if(blocks[way].set_get_valid(0,GET)) {
+		*evictBlock=blocks[way];
 		isEvicted = true;
 	}
 	blocks[way].set_get_dirty(CLEAN,SET);
@@ -86,9 +87,12 @@ bool set::allocate(unsigned long int address, unsigned long int *evictAddress)
 	return isEvicted;
 }
 
-void set::update(unsigned long int address)
+void set::update(block *evictBlock)
 {
-	blocks[find(address)].set_get_dirty(DIRTY,SET);
+	long int way = find(evictBlock->set_get_address(0,GET));
+	blocks[way]=*evictBlock;
+	if(evictBlock->set_get_dirty(0,GET) == DIRTY)
+		updateLRU(way);
 }
 
 void set::updateLRU(long int way)
@@ -97,6 +101,7 @@ void set::updateLRU(long int way)
 		if(*it == way) {
 			LRU.erase(it);
 			LRU.push_back(way);
+			return;
 		}
 }
 
@@ -122,7 +127,7 @@ cache::cache(unsigned int numOfSets, unsigned int numOfWays, unsigned int bSize)
 
 bool cache::find(unsigned long int address)
 {
-	cout<<"set::find="<<sets[extractSet(address)].find(address)<<endl;
+//	cout<<"set::find="<<sets[extractSet(address)].find(address)<<endl;
 	return ((sets[extractSet(address)].find(address) < 0 ) ? false : true);
 }
 
@@ -141,14 +146,14 @@ void cache::erase(unsigned long int address)
 	sets[extractSet(address)].erase(address);
 }
 
-void cache::update(unsigned long int address)
+void cache::update(block *evictBlock)
 {
-	sets[extractSet(address)].update(address);
+	sets[extractSet(evictBlock->set_get_address(0,GET))].update(evictBlock);
 }
 
-bool cache::allocate(unsigned long int address, unsigned long int *evictAddress)
+bool cache::allocate(unsigned long int address, block *evictBlock)
 {
-	return sets[extractSet(address)].allocate(address, evictAddress);
+	return sets[extractSet(address)].allocate(address, evictBlock);
 }
 
 unsigned int cache::extractSet(unsigned long int address)
@@ -180,22 +185,23 @@ MEM::MEM(unsigned int MEMCyc, unsigned int blockSize, bool writeAllocate,
 void MEM::execute(unsigned long int address, char operation)
 {
 	address=address & blockMask;
-	cout<< "adress: " << address<<endl;
-	unsigned long int evictAddress;
+//	cout<< "adress: " << address<<endl;
+	block evictBlock;
 
 	if(L1.find(address)){					//hit in L1
-		cout << "L1: "<< ++L1_hits<< endl;
+		++L1_hits;
 		if(operation=='w')
 			L1.write(address);
 		else
 			L1.read(address);
 	}
 	else if(L2.find(address)){				//hit in L2
-		cout << "L2: "<< ++L2_hits<< endl;
+		++L2_hits;
 		if(operation == 'r' || write_allocate)
 		{
-			if(EVICTED == L1.allocate(address,&evictAddress))
-				L2.update(evictAddress);
+			L2.read(address);
+			if(EVICTED == L1.allocate(address,&evictBlock))
+				L2.update(&evictBlock);
 			if(operation=='w')
 				L1.write(address);
 			else
@@ -205,16 +211,17 @@ void MEM::execute(unsigned long int address, char operation)
 	}
 	else									//hit in RAM
 	{
-		cout << "MEM: "<< ++MEM_hits<< endl;
+		++MEM_hits;
 		if(operation == 'r' || write_allocate)
 		{
-			if(EVICTED == L2.allocate(address, &evictAddress))
+			if(EVICTED == L2.allocate(address, &evictBlock))
 			{
-				if(L1.find(evictAddress))
-					L1.erase(evictAddress);
+				if(L1.find(evictBlock.set_get_address(0,GET)))
+					L1.erase(evictBlock.set_get_address(0,GET));
 			}
-			if(EVICTED == L1.allocate(address, &evictAddress))
-				L2.update(evictAddress);
+			L2.read(address);
+			if(EVICTED == L1.allocate(address, &evictBlock))
+				L2.update(&evictBlock);
 			if(operation=='w')
 				L1.write(address);
 			else
@@ -225,8 +232,8 @@ void MEM::execute(unsigned long int address, char operation)
 
 void MEM::getStats(double* L1MissRate, double* L2MissRate, double* avgAccTime)
 {
-	cout<<L1_hits<<" "<<L1_cyc<<" "<<L2_hits<<" "<<L2_cyc<<" "<<MEM_hits<<" "<<MEM_cyc<<"\n";
-	*avgAccTime = (L1_hits*L1_cyc+L2_hits*L2_cyc+MEM_hits*MEM_cyc)/(L1_hits+L2_hits+MEM_hits);
-	*L2MissRate=MEM_hits/(L2_hits+MEM_hits);
-	*L1MissRate=(L2_hits+MEM_hits)/(L1_hits+L2_hits+MEM_hits);
+//	cout<<L1_hits<<" "<<L1_cyc<<" "<<L2_hits<<" "<<L2_cyc<<" "<<MEM_hits<<" "<<MEM_cyc<<"\n";
+	*avgAccTime = (double)(L1_hits*L1_cyc+L2_hits*L2_cyc+MEM_hits*MEM_cyc)/(double)(L1_hits+L2_hits+MEM_hits);
+	*L2MissRate=(double)MEM_hits/(double)(L2_hits+MEM_hits);
+	*L1MissRate=(double)(L2_hits+MEM_hits)/(double)(L1_hits+L2_hits+MEM_hits);
 }
